@@ -10,24 +10,25 @@ Esse repositório terá como finalidade reunir arquivos de apoio, tais como mode
    2. [Contador de coulomb](#contador-de-coulomb)
    3. [Proteção contra sobreaquecimento](#proteção-contra-sobreaquecimento)
    4. [Proteção contra sobrecarga](#proteção-contra-sobrecarga)
-   5. [Datasheets](Datasheets/)
 
 2. [Modelo de simulação da bateria](#modelo-de-simulação-da-bateria)
-    1. [Funcionamento do modelo equivalente no Simulink](#funcionamento-do-modelo-equivalente-no-simulink)
-    2. [Porta térmica e modelagem da temperatura](#porta-térmica-e-modelagem-da-temperatura)
-    3. [Célula de referência](#célula-de-referência)
-    4. [Configuração simulada](#configuração-simulada)
-    5. [Referências](#arquivos-e-referências-relacionados)
+   1. [Funcionamento do modelo equivalente no Simulink](#funcionamento-do-modelo-equivalente-no-simulink)
+   2. [Porta térmica e modelagem da temperatura](#porta-térmica-e-modelagem-da-temperatura)
+   3. [Célula de referência](#célula-de-referência)
+   4. [Configuração simulada](#configuração-simulada)
+   5. [Arquivos e referências relacionados](#arquivos-e-referências-relacionados)
 
 3. [Modelos das proteções](#modelos-das-proteções)
    1. [Modelo da proteção contra autocarregamento](#modelo-da-proteção-contra-autocarregamento)
    2. [Modelo do Coulomb Counter](#modelo-do-coulomb-counter)
    3. [Modelo da proteção contra sobreaquecimento](#modelo-da-proteção-contra-sobreaquecimento)
    4. [Modelo da proteção contra sobrecarga](#modelo-da-proteção-contra-sobrecarga)
+   5. [Bloco de simulação dos testes UN 38.3](#bloco-de-simulação-dos-testes-un-383)
 
-4. [Parâmetros da simulação](#parâmetros-da-simulação)
+4. [Modelo completo](#modelo-completo)
 
 <br/>
+
 
 # Dispositivos de referência.
 
@@ -120,6 +121,151 @@ Embora a célula de referência seja recarregável, o estudo tem foco em bateria
 ### Imagem do modelo
 ![Modelo da bateria 3S4P](Matlab_Model/Imagens/Modelo_bateria.png)
 
+# Modelos das proteções
+
+Esta seção descreve os modelos simplificados utilizados para representar os circuitos de proteção na simulação. Foram considerados apenas os parâmetros relevantes para demonstrar a atuação de cada proteção no modelo do conjunto de baterias.
+
+Os parâmetros utilizados estão concentrados no arquivo:
+
+[Parâmetros dos componentes](Matlab_Model/parametros_componentes.m)
+
+---
+
+## Modelo da proteção contra autocarregamento
+
+A proteção contra autocarregamento foi representada pelo diodo Schottky RBS2MM40BTR. No projeto, esse componente tem a função de impedir a circulação de corrente entre células ou ramos quando suas tensões estiverem desniveladas, evitando a transferência indesejada de energia entre eles.
+
+Na simulação, o diodo foi modelado de forma simplificada. O principal parâmetro considerado foi a tensão direta, utilizada para representar a queda de tensão durante a condução. Os demais efeitos do componente, como variações térmicas, corrente de fuga e comportamento dinâmico, não foram detalhados no modelo.
+
+| Parâmetro utilizado | Variável | Valor | Unidade | Função no modelo |
+|---|---:|---:|---:|---|
+| Tensão direta do diodo | `V_direta` | 0,37 | V | Representa a queda de tensão durante a condução direta |
 
 
+Referência utilizada:
 
+[RBS2MM40B Datasheet](Datasheets/RBS2MM40B.pdf)
+
+---
+
+## Modelo do Coulomb Counter
+
+O Coulomb Counter LTC2959 foi considerado no projeto como referência para a medição de carga consumida pelo conjunto de baterias. Entretanto, na simulação, o componente não foi modelado internamente.
+
+A contagem de carga foi representada por um medidor ideal do Simulink. Dessa forma, os erros de medição associados ao componente real foram desconsiderados. Para representar o impacto energético do circuito, foi inserida uma fonte de corrente drenando o consumo do Coulomb Counter do conjunto de baterias.
+
+| Parâmetro utilizado | Variável | Valor | Unidade | Função no modelo |
+|---|---:|---:|---:|---|
+| Corrente de consumo do Coulomb Counter | `Icc` | -0,000008 | A | Representa a corrente drenada pelo circuito de medição |
+| Corrente equivalente | - | 8 | µA | Valor equivalente em microampères |
+
+O sinal negativo foi utilizado para indicar que a corrente está sendo drenada da bateria.
+
+### Imagem do modelo
+![Modelo](Matlab_Model/Imagens/Coulomb_Counter.png)
+
+Referência utilizada:
+
+[LTC2959 Datasheet](Datasheets/LTC2959.pdf)
+
+---
+
+## Modelo da proteção contra sobreaquecimento
+
+A proteção contra sobreaquecimento foi representada pelo thermal switch MCP9502. Esse componente foi escolhido por possuir baixo consumo, limiar de temperatura definido de fábrica e saída do tipo push-pull.
+
+Na simulação, o MCP9502 foi modelado como uma chave térmica baseada na comparação da temperatura do conjunto de baterias. Quando a temperatura atinge o valor de atuação, a saída do componente muda de estado, representando a ativação da proteção térmica. A histerese foi incluída para evitar chaveamentos indevidos próximos ao ponto de atuação.
+
+A alimentação do componente foi definida em 3,3 V. O consumo do thermal switch foi representado por uma fonte de corrente. O LDO utilizado para alimentar o componente também não foi modelado internamente, sendo representado apenas pelo seu consumo.
+
+| Parâmetro utilizado | Variável | Valor | Unidade | Função no modelo |
+|---|---:|---:|---:|---|
+| Modelo do componente | `modelo_exato` | MCP9502 | - | Identificação do componente utilizado |
+| Tensão de alimentação | `VDD` | 3,3 | V | Alimentação do thermal switch |
+| Temperatura de atuação | `TSET` | 55 | °C | Temperatura em que a proteção atua |
+| Histerese | `HYST` | 2 | °C | Evita comutação indevida próxima ao limite |
+| Corrente de consumo do CI | `IDD` | 25e-6 | A | Consumo do MCP9502 |
+| Corrente de consumo equivalente | - | 25 | µA | Valor equivalente em microampères |
+| Corrente de carga na saída | `Iload` | 0 | A | Corrente considerada na saída do componente |
+| Saída em condição normal | `OUT_normal` | 0 | V | Nível de saída antes da atuação |
+| Saída com proteção ativa | `OUT_trip` | 3,3 | V | Nível de saída após atuação |
+| Tipo de saída | `tipo_saida` | push-pull | - | Configuração de saída do MCP9502 |
+| Tipo de acionamento | `tipo_acionamento` | hot | - | Atuação por temperatura elevada |
+| Corrente de consumo do LDO | `Ildo` | -0,00007 | A | Consumo do regulador usado para alimentar o thermal switch |
+| Corrente equivalente do LDO | - | 70 | µA | Valor equivalente em microampères |
+
+O sinal negativo em `Ildo` indica que a corrente está sendo drenada do conjunto de baterias.
+
+### Imagem do modelo
+![Modelo](Matlab_Model/Imagens/Thermal_Switch.png)
+
+Referência utilizada:
+
+[MCP9502 Datasheet](Datasheets/MCP9501.pdf)
+
+---
+
+## Modelo da proteção contra sobrecarga
+
+A proteção contra sobrecarga foi representada por um fusível rearmável do tipo PPTC. Esse componente foi utilizado para limitar a corrente em situações de sobrecorrente ou curto-circuito externo.
+
+Na simulação, o PPTC foi modelado como uma resistência variável. Em condição normal, o componente apresenta baixa resistência. Quando ocorre a atuação da proteção, sua resistência aumenta significativamente, reduzindo a corrente no circuito.
+
+A atuação do modelo foi baseada em uma tabela corrente-tempo extraída da curva do datasheet. Essa tabela relaciona o valor da corrente com o tempo necessário para o fusível atuar. Assim, o modelo permite representar o atraso de atuação característico do PPTC.
+
+| Parâmetro utilizado | Variável | Valor | Unidade | Função no modelo |
+|---|---:|---:|---:|---|
+| Resistência inicial | `R_inicial` | 0,18 | Ω | Resistência antes da atuação |
+| Resistência após atuação | `R_trip` | 64,8 | Ω | Resistência considerada após o disparo da proteção |
+| Tabela de corrente | `I_table` | vetor | A | Valores de corrente extraídos da curva corrente-tempo |
+| Tabela de tempo | `t_table` | vetor | s | Tempos de atuação associados à corrente |
+| Corrente mínima da tabela | `I_min_tabela` | 1,6306 | A | Menor corrente considerada na curva de atuação |
+| Corrente máxima da tabela | `I_max_tabela` | 16,1511 | A | Maior corrente considerada na curva de atuação |
+| Tempo mínimo da tabela | `t_min_tabela` | 0,0111 | s | Menor tempo de atuação considerado |
+| Tempo máximo da tabela | `t_max_tabela` | 93,2291 | s | Maior tempo de atuação considerado |
+
+Referência utilizada:
+
+[0ZCJ0110AF2C Datasheet](Datasheets/0ZCJ0110AF2C.pdf)
+
+### Imagem do modelo
+![Modelo](Matlab_Model/Imagens/PPTC.png)
+
+## Bloco de simulação dos testes UN 38.3
+
+O bloco de simulação dos testes UN 38.3 foi desenvolvido para aplicar, em um mesmo ambiente, as condições associadas aos ensaios de descarga, curto-circuito e variação térmica no conjunto de baterias. A estrutura do bloco permite controlar o instante em que cada condição é aplicada e observar a resposta elétrica e térmica do sistema.
+
+A alimentação principal do circuito é conectada pelos terminais `VCC` e `GND`. Na entrada do circuito, a corrente é monitorada por um sensor, permitindo acompanhar o comportamento do conjunto durante a operação normal e durante as condições de falha. A tensão nos terminais também é medida para verificar a resposta do sistema após a atuação das proteções.
+
+O bloco utiliza sinais de controle temporizados para acionar diferentes condições de teste. O sinal `tempo_simu_descarga` define o instante em que a carga principal é conectada ao circuito, iniciando a descarga do conjunto de baterias. Após esse acionamento, espera-se que a bateria forneça corrente para a carga e que a tensão terminal varie de acordo com o comportamento do modelo.
+
+O sinal `tempo_simu_curto` é utilizado para inserir a condição de curto-circuito externo. Quando esse sinal é ativado, o caminho de menor resistência é conectado ao circuito, provocando aumento da corrente. Nessa condição, espera-se que a proteção contra sobrecorrente atue, elevando a resistência equivalente do caminho protegido e limitando a corrente que circula pelo sistema.
+
+A parte térmica do bloco é comandada pelo sinal `tempo_simu_temp`. Esse sinal aplica a condição de aquecimento ao modelo térmico do conjunto de baterias. A temperatura é aplicada à interface térmica do sistema, permitindo avaliar a resposta da proteção térmica. Quando a temperatura atinge o limite definido, espera-se que a proteção altere seu estado e interrompa ou bloqueie a condição de operação definida no circuito.
+
+De forma geral, o bloco deve permitir observar três comportamentos principais:
+
+| Condição aplicada | O que deve acontecer |
+|---|---|
+| Início da descarga | A carga é conectada e a bateria passa a fornecer corrente ao circuito |
+| Aplicação do curto-circuito | A corrente aumenta e a proteção contra sobrecorrente deve limitar esse valor |
+| Elevação da temperatura | A temperatura do conjunto aumenta e a proteção térmica deve atuar ao atingir o limite definido |
+| Monitoramento de tensão e corrente | Os sensores devem indicar a resposta do conjunto antes, durante e após cada condição aplicada |
+
+A imagem abaixo representa o bloco utilizado para aplicar essas condições de teste no modelo.
+
+![Bloco de simulação dos testes UN 38.3](Matlab_Model/Imagens/Bloco_de_teste.png)
+
+Esse bloco foi utilizado como ambiente de simulação para verificar se as proteções respondem corretamente às condições impostas. A proposta não é reproduzir todos os detalhes físicos dos ensaios laboratoriais, mas criar uma representação funcional que permita avaliar a atuação dos modelos de proteção dentro do sistema simulado.
+
+# Modelo completo
+![Modelo Completo](Matlab_Model/Imagens/Modelo_completo.png)
+
+# Resultado teste T.2
+![T2](Gráficos/T2_COMPLETO.png)
+
+# Resultado teste T.5
+![T5](Gráficos/T5_COMPLETO.png)
+
+# Resultado teste T.8
+![T8](Gráficos/T8_COMPLETO.png)
